@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Restaurant = require('../models/Restaurant');
 const Food = require('../models/Food');
@@ -150,6 +151,34 @@ router.get('/owner/dashboard', protect, owner, async (req, res) => {
   }
 });
 
+// Public: avis clients (notes après livraison)
+router.get('/:id/reviews', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid restaurant id' });
+    }
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
+    const rows = await Commande.find({
+      restaurant: req.params.id,
+      status: 'delivered',
+      'rating.score': { $gte: 1, $lte: 5 },
+    })
+      .sort({ 'rating.ratedAt': -1 })
+      .limit(limit)
+      .select('rating');
+
+    res.json(
+      rows.map((c) => ({
+        score: c.rating.score,
+        comment: String(c.rating.comment || '').slice(0, 500),
+        ratedAt: c.rating.ratedAt,
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Get single restaurant
 router.get('/:id', async (req, res) => {
   try {
@@ -174,6 +203,9 @@ router.put('/:id', protect, owner, async (req, res) => {
       restaurant.googleMapsUrl = req.body.googleMapsUrl || restaurant.googleMapsUrl;
       restaurant.cuisineType = req.body.cuisineType || restaurant.cuisineType;
       restaurant.image = req.body.image || restaurant.image;
+      if (req.body.delegation !== undefined) {
+        restaurant.delegation = String(req.body.delegation || '').trim();
+      }
       restaurant.isOpen = req.body.isOpen !== undefined ? req.body.isOpen : restaurant.isOpen;
       const updatedRestaurant = await restaurant.save();
       res.json(updatedRestaurant);

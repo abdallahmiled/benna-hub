@@ -5,6 +5,7 @@ const restaurantSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String },
   address: { type: String, required: true },
+  delegation: { type: String, default: '' },
   location: {
     lat: { type: Number },
     lng: { type: Number }

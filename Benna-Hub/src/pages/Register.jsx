@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { registerCafeOwner, registerLivreur, registerOwner, registerUser } from '../services/api';
 import Navbar from '../components/Navbar';
@@ -7,6 +7,10 @@ import Navbar from '../components/Navbar';
 const Register = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromParam = new URLSearchParams(location.search).get('from');
+  const safeReturnPath =
+    fromParam && fromParam.startsWith('/') && !fromParam.startsWith('//') ? fromParam : null;
 
   const [tab, setTab] = useState('user'); // 'user' | 'owner' | 'cafe_owner' | 'livreur'
   const [form, setForm] = useState({
@@ -43,7 +47,7 @@ const Register = () => {
       });
       localStorage.setItem('token', res.data.token);
       await login(form.email, form.password);
-      navigate('/');
+      navigate(safeReturnPath || '/');
     } catch (err) {
       setError(err.response?.data?.message || 'Erreur lors de l\'inscription');
     } finally {
@@ -365,7 +369,12 @@ const Register = () => {
 
           <p className="text-center text-white/30 text-sm mt-6">
             Déjà un compte ?{' '}
-            <Link to="/login" className="text-[#c19d60] hover:underline">Se connecter</Link>
+            <Link
+              to={safeReturnPath ? `/login?from=${encodeURIComponent(safeReturnPath)}` : '/login'}
+              className="text-[#c19d60] hover:underline"
+            >
+              Se connecter
+            </Link>
           </p>
         </div>
       </div>

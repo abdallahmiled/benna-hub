@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 
 const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromParam = new URLSearchParams(location.search).get('from');
+  const safeReturnPath =
+    fromParam && fromParam.startsWith('/') && !fromParam.startsWith('//') ? fromParam : null;
+
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,8 +23,11 @@ const Login = () => {
     setLoading(true);
     try {
       const data = await login(form.email, form.password);
-      // Redirect based on role
-      if (data.user.role === 'owner') navigate('/dashboard');
+      const role = data.user.role;
+      if (role === 'owner') navigate('/dashboard');
+      else if (role === 'cafe_owner') navigate('/cafe/dashboard');
+      else if (role === 'livreur') navigate('/livreur/dashboard');
+      else if (role === 'user' && safeReturnPath) navigate(safeReturnPath);
       else navigate('/');
     } catch (err) {
       setError(err.response?.data?.message || 'Email ou mot de passe incorrect');
@@ -79,7 +87,12 @@ const Login = () => {
 
           <p className="text-center text-white/30 text-sm mt-6">
             Pas encore de compte ?{' '}
-            <Link to="/register" className="text-[#c19d60] hover:underline">S'inscrire</Link>
+            <Link
+              to={safeReturnPath ? `/register?from=${encodeURIComponent(safeReturnPath)}` : '/register'}
+              className="text-[#c19d60] hover:underline"
+            >
+              S&apos;inscrire
+            </Link>
           </p>
         </div>
       </div>

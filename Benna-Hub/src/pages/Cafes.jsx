@@ -1,7 +1,20 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 import Navbar from '../components/Navbar';
 import { useLang } from '../context/LanguageContext';
+import { gsap } from '../lib/gsap';
+import { prefersReducedMotion } from '../lib/motionPrefs';
+import { getCafes } from '../services/api';
+import { translateDelegation } from '../constants/gabesDelegations';
+
+const API_ORIGIN = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+const toListingImage = (value) => {
+  if (!value) return 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&auto=format&fit=crop';
+  if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  return `${API_ORIGIN}${value.startsWith('/') ? '' : '/'}${value}`;
+};
 
 const CAFES = [
   { id: 1, name: 'Café des Arts', type: 'Café · Pâtisserie', rating: 4.7, reviews: 198, isOpen: true, image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&auto=format&fit=crop', zone: 'Centre-ville', speciality: 'Café turc, gâteaux maison' },
@@ -23,20 +36,66 @@ const StarRating = ({ rating }) => (
   </div>
 );
 
+const mapApiToListing = (c) => ({
+  id: c._id,
+  _id: c._id,
+  name: c.name,
+  type: c.hospitalityType || 'Café',
+  rating: typeof c.rating === 'number' ? c.rating : 0,
+  reviews: typeof c.ratingCount === 'number' ? c.ratingCount : 0,
+  isOpen: c.isOpen !== false,
+  image: toListingImage(c.image),
+  zoneLabel: String(c.delegation || '').trim(),
+  address: c.address || '',
+  speciality: (c.description || '').trim().slice(0, 100) || '—',
+});
+
 const Cafes = () => {
   const { t } = useLang();
+  const pageRootRef = useRef(null);
+  const [cafes, setCafes] = useState([]);
 
-  const filtered = useMemo(() => {
-    return [...CAFES].sort((a, b) => b.rating - a.rating);
+  useEffect(() => {
+    getCafes()
+      .then((res) => {
+        const rows = res.data || [];
+        if (rows.length) setCafes(rows.map(mapApiToListing));
+        else setCafes(CAFES.map((x) => ({ ...x, zoneLabel: '', address: '', speciality: x.speciality })));
+      })
+      .catch(() =>
+        setCafes(CAFES.map((x) => ({ ...x, zoneLabel: '', address: '', speciality: x.speciality })))
+      );
   }, []);
 
+  const filtered = useMemo(() => {
+    return [...cafes].sort((a, b) => b.rating - a.rating);
+  }, [cafes]);
+
+  useLayoutEffect(() => {
+    if (prefersReducedMotion()) return;
+    const root = pageRootRef.current;
+    if (!root) return;
+    const ctx = gsap.context(() => {
+      gsap.from('.cafes-head', { opacity: 0, y: 22, duration: 0.65, ease: 'power3.out' });
+      gsap.from('.cafe-card', {
+        opacity: 0,
+        y: 40,
+        duration: 0.55,
+        stagger: 0.08,
+        ease: 'power2.out',
+        delay: 0.08,
+      });
+    }, root);
+    return () => ctx.revert();
+  }, [filtered.length]);
+
   return (
-    <div className="min-h-screen bg-[#0b1f1e] text-white font-sans">
+    <div ref={pageRootRef} className="min-h-screen bg-[#0b1f1e] text-white font-sans">
       <Navbar />
 
       {/* CAFES GRID (kept, but lower like “listing”) */}
       <section id="cafes" className="max-w-6xl mx-auto px-6 pt-28 pb-20">
-        <div className="flex items-end justify-between gap-6 mb-10">
+        <div className="cafes-head flex items-end justify-between gap-6 mb-10">
           <div>
             <p className="text-[#c19d60] text-[10px] tracking-[0.45em] uppercase mb-3">/ {t('nav_cafes')}</p>
             <h2 className="font-serif text-3xl md:text-4xl text-white">Adresses</h2>
@@ -46,9 +105,10 @@ const Cafes = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((cafe) => (
-            <div
-              key={cafe.id}
-              className="group bg-[#0e2624] border border-white/5 hover:border-[#c19d60]/30 transition-all duration-400 overflow-hidden"
+            <motion.div
+              key={cafe._id || cafe.id}
+              whileHover={prefersReducedMotion() ? {} : { y: -5, transition: { type: 'spring', stiffness: 400, damping: 30 } }}
+              className="cafe-card group bg-[#0e2624] border border-white/5 hover:border-[#c19d60]/35 transition-colors duration-400 overflow-hidden shadow-[0_28px_90px_-55px_rgba(0,0,0,0.9)]"
             >
               <div className="relative h-44 overflow-hidden">
                 <img
@@ -66,8 +126,11 @@ const Cafes = () => {
                 >
                   {cafe.isOpen ? t('card_open') : t('card_closed')}
                 </span>
-                <span className="absolute bottom-3 left-3 text-[9px] tracking-widest text-white/60 bg-black/40 px-2 py-1">
-                  📍 {cafe.zone}
+                <span className="absolute bottom-3 left-3 text-[9px] tracking-widest text-white/60 bg-black/40 px-2 py-1 max-w-[85%] truncate">
+                  📍{' '}
+                  {cafe.zoneLabel
+                    ? translateDelegation(t, cafe.zoneLabel)
+                    : cafe.zone || cafe.address || 'Gabès'}
                 </span>
               </div>
               <div className="p-4">
@@ -78,14 +141,14 @@ const Cafes = () => {
                 <p className="text-white/25 text-[10px] mt-1">{cafe.reviews} avis</p>
                 <div className="mt-3 pt-3 border-t border-white/5">
                   <Link
-                    to={`/cafes/${cafe.id}`}
+                    to={`/cafes/${cafe._id || cafe.id}`}
                     className="w-full block text-center text-[9px] tracking-widest text-white/50 hover:text-[#c19d60] border border-white/10 hover:border-[#c19d60]/40 py-2 transition-all"
                   >
                     {t('card_view')}
                   </Link>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </section>

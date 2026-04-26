@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { getCafes, getFoods, getRestaurants } from '../services/api';
 import { buildSearchEntryText, searchEntries } from '../utils/search';
+import { gsap } from '../lib/gsap';
 
 const LANGUAGES = [
   { code: 'fr', label: 'FR', flag: '🇫🇷' },
@@ -79,6 +80,7 @@ const Navbar = () => {
   const [searchData, setSearchData] = useState(null); // entries[]
   const [searchLoading, setSearchLoading] = useState(false);
   const inputRef = useRef(null);
+  const navRef = useRef(null);
 
   const computeCartCountAll = () => {
     try {
@@ -188,6 +190,24 @@ const Navbar = () => {
     };
   }, [searchData, searchOpen]);
 
+  useLayoutEffect(() => {
+    if (searchOpen) return;
+    const root = navRef.current;
+    if (!root) return;
+    const ctx = gsap.context(() => {
+      const cols = root.querySelectorAll('[data-nav-col]');
+      if (!cols.length) return;
+      gsap.from(cols, {
+        opacity: 0,
+        y: -14,
+        duration: 0.55,
+        stagger: 0.09,
+        ease: 'power2.out',
+      });
+    }, navRef);
+    return () => ctx.revert();
+  }, [location.pathname, searchOpen]);
+
   const quickResults = useMemo(() => searchEntries(searchData || [], searchQ, 8), [searchData, searchQ]);
 
   const openSearch = () => {
@@ -218,10 +238,10 @@ const Navbar = () => {
     'group relative inline-flex items-center align-middle text-white text-[10px] font-sans font-medium tracking-[0.15em] leading-none transition-colors py-2';
 
   return (
-    <nav className="absolute top-0 left-0 right-0 py-6 px-8 z-[500] flex items-center justify-between">
+    <nav ref={navRef} className="absolute top-0 left-0 right-0 py-6 px-8 z-[500] flex items-center justify-between">
       
       {/* Left Links */}
-      <div className="flex-1 flex justify-start">
+      <div data-nav-col className="flex-1 flex justify-start">
         <ul className="hidden md:flex items-center gap-7">
           {navLinks.slice(0, 2).map(({ key, path }) => (
             <li key={key}>
@@ -242,7 +262,7 @@ const Navbar = () => {
       </div>
 
       {/* Center Logo */}
-      <div className="flex-1 flex flex-col items-center justify-center cursor-pointer">
+      <div data-nav-col className="flex-1 flex flex-col items-center justify-center cursor-pointer">
         <div className="text-[#c19d60] mb-1">
           <svg width="60" height="24" viewBox="0 0 60 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M30 20 L30 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -262,7 +282,7 @@ const Navbar = () => {
       </div>
 
       {/* Right: Nav Links + Lang + CTA */}
-      <div className="flex-1 flex items-center justify-end gap-4">
+      <div data-nav-col className="flex-1 flex items-center justify-end gap-4">
         
         {/* Right nav links (desktop) */}
         {!searchOpen ? (

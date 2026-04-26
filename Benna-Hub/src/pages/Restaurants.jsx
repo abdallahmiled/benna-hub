@@ -1,9 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 import Navbar from '../components/Navbar';
 import { useLang } from '../context/LanguageContext';
 import { getRestaurants } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+
+const API_ORIGIN = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+const toListingImage = (value) => {
+  if (!value) return '';
+  if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  return `${API_ORIGIN}${value.startsWith('/') ? '' : '/'}${value}`;
+};
+import { gsap } from '../lib/gsap';
+import { prefersReducedMotion } from '../lib/motionPrefs';
 
 const MOCK_FALLBACK = [
   { _id: '1', name: 'Le Méditerranéen', speciality: 'Tunisien · Fruits de mer', averageRating: 4.8, reviewsCount: 124, images: ['https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop'], city: 'Gabes' },
@@ -36,13 +47,69 @@ const Restaurants = () => {
   const [search, setSearch] = useState('');
   const [zone, setZone] = useState('Tous');
   const [sortBy, setSortBy] = useState('rating');
+  const pageRootRef = useRef(null);
+
+  const filtered = useMemo(
+    () =>
+      restaurants
+        .filter(
+          (r) =>
+            (zone === 'Tous' || r.city === zone || r.address?.includes(zone)) &&
+            (search === '' ||
+              r.name.toLowerCase().includes(search.toLowerCase()) ||
+              r.speciality?.toLowerCase().includes(search.toLowerCase()))
+        )
+        .sort((a, b) => {
+          const br = b.averageRating ?? b.rating ?? 0;
+          const ar = a.averageRating ?? a.rating ?? 0;
+          const bc = b.reviewsCount ?? b.ratingCount ?? b.reviews ?? 0;
+          const ac = a.reviewsCount ?? a.ratingCount ?? a.reviews ?? 0;
+          return sortBy === 'rating' ? br - ar : bc - ac;
+        }),
+    [restaurants, zone, search, sortBy]
+  );
+
+  const listKey = useMemo(
+    () => filtered.map((r) => r._id || r.id).join(',') + '|' + zone + '|' + search + '|' + sortBy,
+    [filtered, zone, search, sortBy]
+  );
+
+  useLayoutEffect(() => {
+    if (loadingData || prefersReducedMotion()) return;
+    const root = pageRootRef.current;
+    if (!root) return;
+    const ctx = gsap.context(() => {
+      gsap.from('.rest-page-head', { opacity: 0, y: 22, duration: 0.65, ease: 'power3.out' });
+      gsap.from('.rest-sticky-bar', { opacity: 0, y: -10, duration: 0.45, ease: 'power2.out', delay: 0.05 });
+      gsap.from('.listing-card', {
+        opacity: 0,
+        y: 36,
+        duration: 0.55,
+        stagger: 0.07,
+        ease: 'power2.out',
+        delay: 0.12,
+      });
+    }, root);
+    return () => ctx.revert();
+  }, [loadingData, listKey]);
 
   useEffect(() => {
     getRestaurants()
       .then((res) => {
         const data = res.data;
         if (data && data.length > 0) {
-          setRestaurants(data);
+          const normalized = data.map((r) => {
+            const img = r.image ? toListingImage(r.image) : '';
+            return {
+              ...r,
+              images: r.images?.length ? r.images : img ? [img] : [],
+              speciality: r.speciality || r.cuisineType || '',
+              averageRating: typeof r.rating === 'number' ? r.rating : 0,
+              reviewsCount: typeof r.ratingCount === 'number' ? r.ratingCount : 0,
+              city: r.city || (r.address && String(r.address).includes('Gab') ? 'Gabès' : 'Gabès'),
+            };
+          });
+          setRestaurants(normalized);
           setApiOnline(true);
         } else {
           setRestaurants(MOCK_FALLBACK);
@@ -52,19 +119,12 @@ const Restaurants = () => {
       .finally(() => setLoadingData(false));
   }, []);
 
-  const filtered = restaurants
-    .filter(r =>
-      (zone === 'Tous' || r.city === zone || r.address?.includes(zone)) &&
-      (search === '' || r.name.toLowerCase().includes(search.toLowerCase()) || r.speciality?.toLowerCase().includes(search.toLowerCase()))
-    )
-    .sort((a, b) => sortBy === 'rating' ? (b.averageRating || 0) - (a.averageRating || 0) : (b.reviewsCount || 0) - (a.reviewsCount || 0));
-
   return (
-    <div className="min-h-screen bg-[#0b1f1e] text-white font-sans">
+    <div ref={pageRootRef} className="min-h-screen bg-[#0b1f1e] text-white font-sans">
       <Navbar />
 
       {/* Page Header */}
-      <div className="pt-32 pb-16 px-6 bg-gradient-to-b from-[#0e2624] to-[#0b1f1e] border-b border-white/5">
+      <div className="rest-page-head pt-32 pb-16 px-6 bg-gradient-to-b from-[#0e2624] to-[#0b1f1e] border-b border-white/5">
         <div className="max-w-6xl mx-auto">
           <p className="text-[#c19d60] text-[10px] tracking-[0.35em] uppercase mb-3">/ {t('nav_restaurants')}</p>
           <h1 className="font-serif text-4xl md:text-5xl text-white mb-4">{t('featured_sub')}</h1>
@@ -73,7 +133,7 @@ const Restaurants = () => {
       </div>
 
       {/* Filters */}
-      <div className="sticky top-0 z-40 bg-[#0b1f1e]/95 backdrop-blur-sm border-b border-white/5 py-4 px-6">
+      <div className="rest-sticky-bar sticky top-0 z-40 bg-[#0b1f1e]/95 backdrop-blur-md border-b border-white/5 py-4 px-6 shadow-[0_12px_40px_-28px_rgba(0,0,0,0.95)]">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-4">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
@@ -128,9 +188,10 @@ const Restaurants = () => {
             <p className="text-white/30 text-[11px] tracking-widest mb-6 uppercase">{filtered.length} établissements trouvés</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-7">
               {filtered.map(r => (
-                <div
+                <motion.div
                   key={r._id || r.id}
-                  className="group bg-[#0e2624] border border-white/5 hover:border-[#c19d60]/30 transition-all duration-400 overflow-hidden"
+                  whileHover={prefersReducedMotion() ? {} : { y: -5, transition: { type: 'spring', stiffness: 400, damping: 30 } }}
+                  className="listing-card group bg-[#0e2624] border border-white/5 hover:border-[#c19d60]/35 transition-colors duration-400 overflow-hidden shadow-[0_28px_90px_-55px_rgba(0,0,0,0.9)]"
                 >
                   {/* Image */}
                   <div className="relative h-52 overflow-hidden">
@@ -161,7 +222,7 @@ const Restaurants = () => {
                       ) : null}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </>

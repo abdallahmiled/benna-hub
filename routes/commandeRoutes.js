@@ -248,7 +248,7 @@ router.patch('/:id/rating', protect, async (req, res) => {
     const deliveredWithRating = await Commande.find({
       restaurant: commande.restaurant,
       status: 'delivered',
-      'rating.score': { $exists: true }
+      'rating.score': { $gte: 1, $lte: 5 },
     }).select('rating.score');
 
     const ratingCount = deliveredWithRating.length;

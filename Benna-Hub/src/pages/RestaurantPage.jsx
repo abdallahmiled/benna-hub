@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getFoods, getRestaurant } from '../services/api';
+import { getFoods, getRestaurant, getRestaurantReviews } from '../services/api';
 import { getMapPreviewState } from '../utils/maps';
 import { useAuth } from '../context/AuthContext';
 
@@ -56,6 +56,7 @@ const RestaurantPage = () => {
   const [, setError] = useState('');
   const [restaurant, setRestaurant] = useState(null);
   const [foods, setFoods] = useState([]);
+  const [publicReviews, setPublicReviews] = useState([]);
   const [cart, setCart] = useState([]); // [{ foodId, name, price, qty }]
   const [pageIndex, setPageIndex] = useState(0);
   const [anim, setAnim] = useState(null); // { dir: 1|-1, nextIndex: number } | null
@@ -78,20 +79,27 @@ const RestaurantPage = () => {
         // Si l'ID n'est pas un ObjectId (ex: mocks "1", "2"...), on affiche les plats mock directement.
         if (!isMongoObjectId) {
           if (cancelled) return;
-          setRestaurant({ name: 'Restaurant' });
-          setFoods([]);
-          return;
+        setRestaurant({ name: 'Restaurant' });
+        setFoods([]);
+        setPublicReviews([]);
+        return;
         }
 
-        const [rRes, fRes] = await Promise.all([getRestaurant(id), getFoods({ restaurant: id })]);
+        const [rRes, fRes, revRes] = await Promise.all([
+          getRestaurant(id),
+          getFoods({ restaurant: id }),
+          getRestaurantReviews(id, { limit: 15 }).catch(() => ({ data: [] })),
+        ]);
         if (cancelled) return;
         setRestaurant(rRes.data);
         setFoods(fRes.data || []);
+        setPublicReviews(Array.isArray(revRes.data) ? revRes.data : []);
       } catch {
         // Même si l'API échoue, on garde l'expérience (scroll + plats mock) pour tester l'UI.
         if (cancelled) return;
         setRestaurant({ name: 'Restaurant' });
         setFoods([]);
+        setPublicReviews([]);
         setError('');
       } finally {
         if (!cancelled) setLoading(false);
@@ -249,9 +257,9 @@ const RestaurantPage = () => {
   const next = anim ? pages[anim.nextIndex] : null;
 
   const PageShell = ({ children }) => (
-    <div className="h-full w-full rounded-[18px] border border-white/10 bg-[#0b0f10] shadow-[0_45px_140px_-70px_rgba(0,0,0,0.92)]">
-      <div className="h-full w-full rounded-[18px] bg-[radial-gradient(1200px_800px_at_20%_0%,rgba(193,157,96,0.08),transparent_60%),radial-gradient(900px_700px_at_90%_20%,rgba(255,255,255,0.05),transparent_62%)]">
-        <div className="h-full w-full rounded-[18px] bg-[linear-gradient(90deg,rgba(0,0,0,0.40),transparent_20%,transparent_80%,rgba(0,0,0,0.40))]">
+    <div className="h-full w-full rounded-[16px] border border-[#c19d60]/30 bg-[#0b0f10] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06),0_28px_90px_-40px_rgba(0,0,0,0.85)]">
+      <div className="h-full w-full rounded-[15px] bg-[radial-gradient(1200px_800px_at_20%_0%,rgba(193,157,96,0.1),transparent_60%),radial-gradient(900px_700px_at_90%_20%,rgba(255,255,255,0.06),transparent_62%)]">
+        <div className="h-full w-full rounded-[15px] bg-[linear-gradient(90deg,rgba(0,0,0,0.40),transparent_20%,transparent_80%,rgba(0,0,0,0.40))]">
           {children}
         </div>
       </div>
@@ -262,30 +270,39 @@ const RestaurantPage = () => {
     const src = toImageUrl(dish.image) || DISH_FALLBACK;
     const isAvailable = dish?.isAvailable !== false;
     return (
-      <div className="h-full w-full overflow-hidden rounded-[18px] flex flex-col">
-        {/* Header */}
-        <div className="relative bg-[#0b0f10]">
-          <div className="px-7 pt-4 pb-3 md:px-10 md:pt-5">
-            <div className="flex items-center justify-between gap-4">
-              <div className="w-[84px]" />
-              <div className="text-center">
-                <p className="font-serif text-[28px] leading-none tracking-[0.16em] text-white/95 md:text-[36px] animate-fade-up">
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[15px]">
+        {/* Header — plus compact pour tout voir sur un écran */}
+        <div className="relative shrink-0 bg-[#0b0f10]">
+          <div className="px-4 pt-2.5 pb-2 md:px-8 md:pt-3 md:pb-2.5">
+            <div className="flex items-center justify-between gap-2 md:gap-4">
+              <div className="w-14 shrink-0 md:w-[72px]" />
+              <div className="min-w-0 text-center">
+                <p className="font-serif text-[22px] leading-none tracking-[0.14em] text-white/95 md:text-[28px] animate-fade-up">
                   MENU
                 </p>
-                <p className="mt-2 text-[10px] uppercase tracking-[0.34em] text-white/45 animate-fade-up">
+                <p className="mt-1 text-[9px] uppercase tracking-[0.28em] text-white/45 animate-fade-up line-clamp-1">
                   {title}
                 </p>
+                {typeof restaurant?.rating === 'number' && (restaurant.rating > 0 || (restaurant.ratingCount ?? 0) > 0) ? (
+                  <div className="mt-1.5 flex flex-col items-center gap-0.5">
+                    <Stars rating={restaurant.rating} />
+                    <span className="text-white/40 text-[9px]">
+                      {Number(restaurant.rating).toFixed(1)} / 5 · {restaurant.ratingCount ?? 0} avis
+                    </span>
+                  </div>
+                ) : null}
               </div>
-              <div className="w-[84px] flex justify-end">
+              <div className="w-14 shrink-0 flex justify-end md:w-[72px]">
                 <span
-                  className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] ${
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[9px] uppercase tracking-[0.18em] md:px-2.5 md:py-1.5 md:text-[10px] md:tracking-[0.22em] ${
                     isAvailable
                       ? 'border-violet-400/40 bg-violet-500/10 text-violet-200'
                       : 'border-red-400/40 bg-red-500/10 text-red-200'
                   }`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${isAvailable ? 'bg-violet-200' : 'bg-red-200'}`} />
-                  {isAvailable ? 'Disponible' : 'Indisponible'}
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isAvailable ? 'bg-violet-200' : 'bg-red-200'}`} />
+                  <span className="hidden sm:inline">{isAvailable ? 'Disponible' : 'Indisponible'}</span>
+                  <span className="sm:hidden">{isAvailable ? 'Dispo' : 'Indispo'}</span>
                 </span>
               </div>
             </div>
@@ -293,54 +310,54 @@ const RestaurantPage = () => {
           <div className="h-px w-full bg-white/15" />
         </div>
 
-        {/* Body (infos à gauche / image à droite) */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(320px,460px)_1fr]">
+        {/* Body : défilement interne si besoin */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[minmax(0,42%)_1fr]">
           {/* Left panel */}
-          <div className="relative bg-[#0b0f10] px-7 py-4 md:px-10 md:py-5 border-b md:border-b-0 overflow-hidden">
+          <div className="relative max-h-[min(52vh,420px)] min-h-0 overflow-y-auto overscroll-contain border-b border-white/10 bg-[#0b0f10] px-4 py-3 md:max-h-none md:border-b-0 md:px-8 md:py-4">
             <div className="absolute inset-0 pointer-events-none opacity-[0.16] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.18)_1px,transparent_0)] [background-size:18px_18px]" />
 
-            <div className="relative animate-fade-up h-full flex flex-col">
-              <div className="space-y-4">
+            <div className="relative animate-fade-up flex min-h-min flex-col">
+              <div className="space-y-2.5 md:space-y-3">
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.32em] text-white/45">Nom</p>
-                  <div className="mt-2 h-px w-full bg-white/10" />
-                  <h2 className="mt-3 font-serif text-2xl md:text-3xl text-white leading-[1.1]">{dish.name}</h2>
+                  <p className="text-[9px] uppercase tracking-[0.28em] text-white/45 md:text-[10px] md:tracking-[0.32em]">Nom</p>
+                  <div className="mt-1.5 h-px w-full bg-white/10" />
+                  <h2 className="mt-2 font-serif text-xl leading-tight text-white md:text-2xl">{dish.name}</h2>
                   {typeof dish.rating === 'number' ? (
-                    <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="mt-2 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         <Stars rating={dish.rating} />
-                        <span className="text-white/35 text-[11px]">
+                        <span className="text-white/35 text-[10px]">
                           ({dish.ratingCount ?? 0})
                         </span>
                       </div>
-                      <span className="text-white/25 text-[10px] tracking-widest uppercase">Rating</span>
+                      <span className="text-white/25 text-[9px] tracking-widest uppercase">Rating</span>
                     </div>
                   ) : null}
                 </div>
 
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.32em] text-white/45">Description</p>
-                  <div className="mt-2 h-px w-full bg-white/10" />
-                  <p className="mt-3 text-white/65 text-[14px] leading-relaxed">
+                  <p className="text-[9px] uppercase tracking-[0.28em] text-white/45 md:text-[10px] md:tracking-[0.32em]">Description</p>
+                  <div className="mt-1.5 h-px w-full bg-white/10" />
+                  <p className="mt-2 text-[13px] leading-relaxed text-white/65 md:text-sm">
                     {dish.description || 'Spécialité maison préparée avec des ingrédients frais.'}
                   </p>
                 </div>
 
                 <div>
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center justify-center h-8 w-12 rounded-full border border-white/15 bg-white/5 text-[10px] tracking-[0.28em] uppercase text-white/70">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-7 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-[9px] uppercase tracking-[0.22em] text-white/70 md:h-8 md:w-12 md:text-[10px] md:tracking-[0.28em]">
                       Prix
                     </span>
                     <div className="h-px flex-1 bg-white/10" />
                   </div>
-                  <p className="mt-2 font-serif text-3xl md:text-4xl text-[#c19d60]">
+                  <p className="mt-1.5 font-serif text-2xl text-[#c19d60] md:text-3xl">
                     {typeof dish.price === 'number' ? `${dish.price} TND` : dish.price}
                   </p>
                 </div>
               </div>
 
               {user?.role === 'user' ? (
-                <div className="mt-auto pt-3 pb-1">
+                <div className="mt-4 pb-1 md:mt-5">
                   {isAvailable ? (
                     <button
                       type="button"
@@ -355,10 +372,10 @@ const RestaurantPage = () => {
             </div>
           </div>
 
-          {/* Right photo */}
-          <div className="relative min-h-[260px] md:min-h-0 overflow-hidden">
+          {/* Right photo — hauteur bornée sur mobile pour laisser place au prix / bouton */}
+          <div className="relative h-[min(36vh,240px)] shrink-0 overflow-hidden border-t border-white/10 md:h-full md:min-h-0 md:border-t-0">
             <div className="absolute inset-0">
-              <div className="relative h-full w-full overflow-hidden rounded-none md:rounded-r-[18px]">
+              <div className="relative h-full w-full overflow-hidden rounded-none md:rounded-r-[15px]">
                 <img
                   src={src}
                   alt={dish.name}
@@ -448,6 +465,29 @@ const RestaurantPage = () => {
             ) : null}
           </div>
         </div>
+
+        {publicReviews.length > 0 ? (
+          <div className="mt-10">
+            <p className="text-[#c19d60] text-[10px] tracking-[0.35em] uppercase mb-3">Avis clients</p>
+            <p className="text-white/35 text-[11px] mb-4">
+              Notes laissées après livraison ({publicReviews.length} récent{publicReviews.length > 1 ? 's' : ''}
+              ).
+            </p>
+            <ul className="space-y-3 max-h-[min(320px,40vh)] overflow-y-auto pr-1">
+              {publicReviews.map((rev, idx) => (
+                <li
+                  key={`${rev.ratedAt || idx}-${idx}`}
+                  className="rounded-[14px] border border-white/10 bg-[#0b1f1e]/60 p-4"
+                >
+                  <Stars rating={rev.score} />
+                  {rev.comment ? (
+                    <p className="mt-2 text-white/65 text-sm leading-relaxed">&ldquo;{rev.comment}&rdquo;</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-4 pt-6">
@@ -471,14 +511,27 @@ const RestaurantPage = () => {
     <div ref={rootRef} className="h-screen overflow-hidden bg-[#0b1f1e] text-white font-sans">
       <Navbar />
 
-      <div className="pt-24 md:pt-28 px-6">
+      <div className="pt-24 md:pt-28 px-4 sm:px-6 pb-4">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-end justify-between gap-4 mb-4">
+          <div className="flex items-end justify-between gap-4 mb-2 md:mb-3">
             <div>
               <p className="text-[#c19d60] text-[10px] tracking-[0.35em] uppercase mb-2">/ Restaurant</p>
               <h1 className="font-serif text-xl md:text-3xl text-white leading-tight">{title}</h1>
               {restaurant?.address ? (
                 <p className="text-white/45 text-sm mt-2">{restaurant.address}</p>
+              ) : null}
+              {typeof restaurant?.rating === 'number' &&
+              (restaurant.rating > 0 || (restaurant.ratingCount ?? 0) > 0) ? (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <Stars rating={restaurant.rating} />
+                  <span className="text-white/50 text-sm">
+                    {Number(restaurant.rating).toFixed(1)} / 5 · {restaurant.ratingCount ?? 0} avis
+                  </span>
+                </div>
+              ) : isMongoObjectId ? (
+                <p className="text-white/30 text-xs mt-2">
+                  Pas encore d&apos;avis — après livraison, les clients peuvent noter depuis « Mes commandes ».
+                </p>
               ) : null}
             </div>
             <Link
@@ -493,17 +546,20 @@ const RestaurantPage = () => {
             <div className="border border-white/10 bg-[#0e2624] p-6 text-white/60">Chargement…</div>
           ) : (
             <>
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-1 flex items-center justify-between sm:mb-2">
                 <div />
                 <p className="text-white/35 text-[11px] tracking-widest uppercase">
                   {safeIndex + 1}/{pages.length}
                 </p>
               </div>
 
-              <div className="relative mx-auto h-[calc(100vh-220px)] md:h-[calc(100vh-260px)] w-full max-w-4xl">
-                <div className="absolute inset-0 rounded-[22px] bg-[#071a19] shadow-[0_50px_160px_-90px_rgba(0,0,0,0.95)]" />
+              {/* Cadre extérieur visible + léger décalage vers le haut */}
+              <div className="mx-auto w-full max-w-3xl -translate-y-2 px-2 pb-6 sm:-translate-y-3 sm:px-3 md:-translate-y-3">
+                <div className="rounded-[22px] border-2 border-[#c19d60]/45 bg-[#0e2624] p-2 shadow-[0_12px_48px_-12px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.08),0_0_64px_-8px_rgba(193,157,96,0.18)]">
+                  <div className="relative mx-auto h-[calc(100dvh-12.5rem)] min-h-[260px] max-h-[min(70dvh,calc(100dvh-10.5rem))] w-full sm:h-[calc(100dvh-13.5rem)] sm:max-h-[min(66dvh,calc(100dvh-11.5rem))] md:h-[calc(100dvh-14rem)] md:max-h-[min(62dvh,calc(100dvh-12rem))] overflow-hidden rounded-[16px] ring-1 ring-white/15">
+                    <div className="pointer-events-none absolute inset-0 rounded-[16px] bg-[#071a19]/80" />
 
-                <div className="absolute inset-0 [perspective:1800px]">
+                    <div className="absolute inset-0 [perspective:1800px]">
                   {/* page actuelle */}
                   <div
                     className="absolute inset-0"
@@ -538,6 +594,8 @@ const RestaurantPage = () => {
                       <PageShell>{renderPage(next)}</PageShell>
                     </div>
                   ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
             </>

@@ -34,22 +34,34 @@ const formatOrderNo = (order) => {
   return String(order?._id || '').slice(-5).toUpperCase();
 };
 
-const Stars = ({ value = 0, onPick }) => {
+const Stars = ({ value = 0, onPick, readOnly }) => {
   return (
     <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <button
-          key={i}
-          type="button"
-          onClick={() => onPick?.(i)}
-          className={`h-7 w-7 grid place-items-center border border-white/10 hover:border-[#c19d60]/50 ${
-            i <= value ? 'text-[#c19d60]' : 'text-white/25'
-          }`}
-          aria-label={`${i} étoiles`}
-        >
-          ★
-        </button>
-      ))}
+      {[1, 2, 3, 4, 5].map((i) =>
+        readOnly || !onPick ? (
+          <span
+            key={i}
+            className={`h-7 w-7 grid place-items-center text-lg select-none ${
+              i <= value ? 'text-[#c19d60]' : 'text-white/20'
+            }`}
+            aria-hidden
+          >
+            ★
+          </span>
+        ) : (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onPick(i)}
+            className={`h-7 w-7 grid place-items-center border border-white/10 hover:border-[#c19d60]/50 ${
+              i <= value ? 'text-[#c19d60]' : 'text-white/25'
+            }`}
+            aria-label={`${i} étoiles`}
+          >
+            ★
+          </button>
+        )
+      )}
     </div>
   );
 };
@@ -144,6 +156,10 @@ const MyCommandes = () => {
                 <div className="px-5 pb-5">
                   <div className="border border-white/10 bg-[#0b1f1e]/35 p-4">
                     <p className="text-[#c19d60] text-[10px] tracking-[0.35em] uppercase mb-3">Donner une note</p>
+                    <p className="text-white/40 text-xs mb-3">
+                      Ta note met à jour la moyenne du restaurant ; elle est visible par tout le monde sur la fiche du
+                      restaurant.
+                    </p>
                     <Stars
                       value={ratingDraft[o._id]?.score || 0}
                       onPick={(score) => setRatingDraft((p) => ({ ...p, [o._id]: { ...(p[o._id] || {}), score } }))}
@@ -163,6 +179,17 @@ const MyCommandes = () => {
                         Envoyer
                       </button>
                     </div>
+                  </div>
+                </div>
+              ) : null}
+              {o.status === 'delivered' && o.rating?.score ? (
+                <div className="px-5 pb-5">
+                  <div className="border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <p className="text-emerald-300/90 text-[10px] tracking-[0.35em] uppercase mb-2">Note enregistrée</p>
+                    <Stars value={o.rating.score} readOnly />
+                    {o.rating.comment ? (
+                      <p className="mt-2 text-white/60 text-sm leading-relaxed">&ldquo;{o.rating.comment}&rdquo;</p>
+                    ) : null}
                   </div>
                 </div>
               ) : null}

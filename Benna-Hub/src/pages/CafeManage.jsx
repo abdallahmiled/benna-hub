@@ -227,30 +227,41 @@ const CafeManage = () => {
               {products.length === 0 ? (
                 <p className="text-white/40 text-sm">Aucun produit pour le moment.</p>
               ) : (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid auto-rows-fr gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {products.map((p) => {
                     const isEditing = editingId === p._id;
                     const img = toImageUrl(p.image);
                     return (
                       <article
                         key={p._id}
-                        className="border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent overflow-hidden"
+                        className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent"
                       >
-                        <div className="aspect-[4/3] bg-black/20 overflow-hidden">
+                        <div className="relative aspect-[4/5] w-full shrink-0 overflow-hidden bg-black/30">
                           {img ? (
                             <img
                               src={img}
                               alt={p.name}
-                              className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.03]"
+                              className="h-full w-full min-h-0 object-cover object-center transition-transform duration-500 hover:scale-[1.03]"
                               loading="lazy"
                             />
                           ) : (
-                            <div className="h-full w-full flex items-center justify-center text-white/30 text-sm">
+                            <div className="flex h-full w-full items-center justify-center text-white/30 text-sm">
                               Sans image
                             </div>
                           )}
+                          {!isEditing ? (
+                            <span
+                              className={`absolute right-2 top-2 rounded-sm px-2.5 py-1 text-[9px] font-semibold uppercase tracking-widest backdrop-blur-sm ${
+                                p.isAvailable !== false
+                                  ? 'bg-emerald-500/85 text-white ring-1 ring-emerald-400/50'
+                                  : 'bg-red-950/80 text-red-200 ring-1 ring-red-500/40'
+                              }`}
+                            >
+                              {p.isAvailable !== false ? 'Disponible' : 'Indisponible'}
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="p-4">
+                        <div className="flex flex-1 flex-col p-4">
                           {isEditing ? (
                             <div className="space-y-3">
                               <input
@@ -302,17 +313,14 @@ const CafeManage = () => {
                               </div>
                             </div>
                           ) : (
-                            <div>
+                            <div className="flex flex-1 flex-col">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className="font-serif text-lg text-white truncate">{p.name}</p>
-                                  <p className="text-white/45 text-xs mt-1">
-                                    {p.isAvailable !== false ? 'Dispo' : 'Indispo'}
-                                  </p>
                                 </div>
                                 <p className="font-serif text-lg text-[#c19d60] whitespace-nowrap">{p.price} TND</p>
                               </div>
-                              <div className="mt-4 flex items-center justify-end gap-2">
+                              <div className="mt-auto flex items-center justify-end gap-2 pt-4">
                                 <button
                                   type="button"
                                   onClick={() => startEdit(p)}

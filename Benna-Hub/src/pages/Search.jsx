@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getCafes, getFoods, getRestaurants } from '../services/api';
 import { buildSearchEntryText, searchEntries } from '../utils/search';
+import { gsap } from '../lib/gsap';
+import { prefersReducedMotion } from '../lib/motionPrefs';
 
 const useQuery = () => {
   const { search } = useLocation();
@@ -15,6 +17,7 @@ const Search = () => {
   const [q, setQ] = useState(initialQ);
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState([]);
+  const pageRootRef = useRef(null);
 
   useEffect(() => {
     setQ(initialQ);
@@ -74,16 +77,36 @@ const Search = () => {
 
   const results = useMemo(() => searchEntries(entries, q, 60), [entries, q]);
 
+  useLayoutEffect(() => {
+    if (loading || prefersReducedMotion()) return;
+    const root = pageRootRef.current;
+    if (!root) return;
+    const ctx = gsap.context(() => {
+      gsap.from('.search-hero', { opacity: 0, y: 18, duration: 0.55, ease: 'power3.out' });
+      gsap.from('.search-result-card', {
+        opacity: 0,
+        y: 28,
+        duration: 0.42,
+        stagger: 0.055,
+        ease: 'power2.out',
+        delay: 0.06,
+      });
+    }, root);
+    return () => ctx.revert();
+  }, [loading, results.length, q]);
+
   return (
-    <div className="min-h-screen bg-[#0b1f1e] text-white font-sans">
+    <div ref={pageRootRef} className="min-h-screen bg-[#0b1f1e] text-white font-sans">
       <Navbar />
 
       <div className="pt-32 pb-16 px-6">
         <div className="max-w-6xl mx-auto">
-          <p className="text-[#c19d60] text-[10px] tracking-[0.45em] uppercase mb-3">/ Recherche</p>
-          <h1 className="font-serif text-3xl md:text-4xl text-white">Trouver un café, un restaurant ou un plat</h1>
+          <div className="search-hero">
+            <p className="text-[#c19d60] text-[10px] tracking-[0.45em] uppercase mb-3">/ Recherche</p>
+            <h1 className="font-serif text-3xl md:text-4xl text-white">Trouver un café, un restaurant ou un plat</h1>
+          </div>
 
-          <div className="mt-7 border border-white/10 bg-[#0e2624]/60 backdrop-blur-sm p-4">
+          <div className="mt-7 border border-white/10 bg-[#0e2624]/60 backdrop-blur-md p-4 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.85)]">
             <div className="relative">
               <input
                 value={q}
@@ -115,7 +138,7 @@ const Search = () => {
                       <Link
                         key={`${r.type}_${r.id}`}
                         to={r.href}
-                        className="group border border-white/10 bg-[#0e2624]/55 hover:border-[#c19d60]/40 transition-colors p-4"
+                        className="search-result-card group border border-white/10 bg-[#0e2624]/55 hover:border-[#c19d60]/45 transition-colors p-4 shadow-[0_18px_50px_-40px_rgba(0,0,0,0.9)]"
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">

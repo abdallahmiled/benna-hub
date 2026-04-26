@@ -16,6 +16,8 @@ const cafeReservationSchema = new mongoose.Schema(
       enum: ['pending', 'accepted', 'rejected', 'completed', 'cancelled'],
       default: 'pending',
     },
+    /** Numéro de table (1..N) pour la date de réservation, attribué à l’acceptation */
+    assignedTableNumber: { type: Number, min: 1, default: null },
     ownerMessage: { type: String, default: '' },
   },
   { timestamps: true }

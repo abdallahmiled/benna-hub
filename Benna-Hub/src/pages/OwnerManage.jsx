@@ -395,37 +395,37 @@ const OwnerManage = () => {
                   <p className="mt-8 border-t border-white/10 pt-8 text-[10px] uppercase tracking-[0.28em] text-[#c19d60]/90">
                     Votre carte — plats ajoutés
                   </p>
-                  <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="mt-4 grid auto-rows-fr gap-5 sm:grid-cols-2 lg:grid-cols-3">
                     {foods.map((f) => (
                       <article
                         key={f._id}
-                        className="group flex flex-col overflow-hidden rounded-xl border border-[#c19d60]/25 bg-gradient-to-b from-[#102a28] to-[#0b1f1e] shadow-lg shadow-black/40 ring-1 ring-white/5 transition-all duration-300 hover:-translate-y-1 hover:border-[#c19d60]/50"
+                        className="group flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[#c19d60]/25 bg-gradient-to-b from-[#102a28] to-[#0b1f1e] shadow-lg shadow-black/40 ring-1 ring-white/5 transition-all duration-300 hover:-translate-y-1 hover:border-[#c19d60]/50"
                       >
-                        <div className="relative aspect-[4/3] bg-[#0b1f1e]">
+                        <div className="relative aspect-[4/5] w-full shrink-0 overflow-hidden bg-[#0b1f1e]">
                           <img
                             src={
                               toImageUrl(f.image) ||
                               'https://images.unsplash.com/photo-1544025162-d76694265947?w=600'
                             }
                             alt={f.name}
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                            className="h-full w-full min-h-0 object-cover object-center transition-transform duration-500 group-hover:scale-[1.03]"
                           />
                           {editingFoodId !== f._id && (
                             <button
                               type="button"
                               onClick={() => toggleFoodAvailability(f)}
                               disabled={saving}
-                              className={`absolute right-2 top-2 rounded-full px-2.5 py-0.5 text-[9px] font-medium uppercase tracking-wide backdrop-blur-sm ${
+                              className={`absolute right-2 top-2 rounded-sm px-2.5 py-1 text-[9px] font-semibold uppercase tracking-widest backdrop-blur-sm ${
                                 f.isAvailable !== false
-                                  ? 'bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-500/35'
-                                  : 'bg-red-950/70 text-red-300 ring-1 ring-red-500/40'
+                                  ? 'bg-emerald-500/85 text-white ring-1 ring-emerald-400/50'
+                                  : 'bg-red-950/80 text-red-200 ring-1 ring-red-500/40'
                               }`}
                             >
                               {f.isAvailable !== false ? 'Disponible' : 'Indisponible'}
                             </button>
                           )}
                         </div>
-                        <div className="flex flex-1 flex-col gap-3 border-t border-white/10 p-4">
+                        <div className="flex min-h-0 flex-1 flex-col gap-3 border-t border-white/10 p-4">
                           {editingFoodId === f._id ? (
                             <>
                               <input

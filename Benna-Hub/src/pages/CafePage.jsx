@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useLang } from '../context/LanguageContext';
-import { createCafeReservation, getCafe, getCafeProducts } from '../services/api';
+import {
+  createCafeReservation,
+  getCafe,
+  getCafeProducts,
+  getCafeReservationDaySummary,
+} from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const API_ORIGIN = 'http://localhost:5000';
@@ -148,6 +153,14 @@ const MenuRow = ({ name, price, desc }) => (
   </div>
 );
 
+const localDateYMD = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 const CAFE_MENU = {
   bestsellers: [
     { name: 'Caffè Latte', price: '13 TND', desc: 'Espresso doux, lait velouté, mousse légère.' },
@@ -165,6 +178,8 @@ const CafePage = () => {
   const { t } = useLang();
   const { user } = useAuth();
   const { id } = useParams();
+  const location = useLocation();
+  const isClientUser = user?.role === 'user';
   const cafe = useMemo(() => CAFES.find((c) => String(c.id) === String(id)), [id]);
   const [query, setQuery] = useState('');
   const [apiCafe, setApiCafe] = useState(null);
@@ -179,8 +194,14 @@ const CafePage = () => {
   });
   const [reservationMsg, setReservationMsg] = useState('');
   const [reservationSaving, setReservationSaving] = useState(false);
+  const [tableDaySummary, setTableDaySummary] = useState(null);
+  const [tableSummaryLoading, setTableSummaryLoading] = useState(false);
 
   const isObjectId = useMemo(() => /^[a-fA-F0-9]{24}$/.test(String(id || '')), [id]);
+  const tableSummaryDate = useMemo(
+    () => (reservation.reservationDate?.trim() ? reservation.reservationDate.trim() : localDateYMD()),
+    [reservation.reservationDate]
+  );
   const productsToShow = useMemo(() => {
     // Si on a des produits back, on les affiche.
     if (isObjectId && apiProducts.length) return apiProducts;
@@ -221,6 +242,32 @@ const CafePage = () => {
     };
   }, [id, isObjectId]);
 
+  useEffect(() => {
+    if (!isObjectId || !id) {
+      setTableDaySummary(null);
+      setTableSummaryLoading(false);
+      return;
+    }
+    let alive = true;
+    setTableSummaryLoading(true);
+    getCafeReservationDaySummary(id, tableSummaryDate)
+      .then((res) => {
+        if (alive) {
+          setTableDaySummary(res.data || null);
+          setTableSummaryLoading(false);
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setTableDaySummary(null);
+          setTableSummaryLoading(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [id, isObjectId, tableSummaryDate]);
+
   const heroTitle = apiCafe?.name || cafe?.name || 'Café';
   const heroSub = apiCafe?.description || cafe?.speciality || 'Coffee moment';
 
@@ -237,7 +284,7 @@ const CafePage = () => {
 
   const submitReservation = async () => {
     setReservationMsg('');
-    if (user?.role !== 'user') {
+    if (!isClientUser) {
       setReservationMsg('Connectez-vous en compte client pour réserver.');
       return;
     }
@@ -299,11 +346,38 @@ const CafePage = () => {
                 <h1 className="font-serif text-5xl md:text-6xl text-white leading-[1.05]">{heroTitle}</h1>
                 <p className="mt-5 text-white/60 text-sm leading-relaxed max-w-2xl">{heroSub}</p>
                 {apiCafe || cafe ? (
-                  <p className="mt-4 text-white/45 text-[11px] tracking-wider">
-                    📍 {apiCafe?.address || cafe?.zone || '—'} ·{' '}
-                    {apiCafe?.rating ? `⭐ ${apiCafe.rating}` : cafe?.rating ? `⭐ ${cafe.rating}` : '⭐ —'} ·{' '}
-                    {apiCafe?.isOpen !== undefined ? (apiCafe.isOpen ? t('card_open') : t('card_closed')) : cafe?.isOpen ? t('card_open') : t('card_closed')}
-                  </p>
+                  <>
+                    <p className="mt-4 text-white/45 text-[11px] tracking-wider">
+                      📍 {apiCafe?.address || cafe?.zone || '—'} ·{' '}
+                      {apiCafe?.rating ? `⭐ ${apiCafe.rating}` : cafe?.rating ? `⭐ ${cafe.rating}` : '⭐ —'} ·{' '}
+                      {apiCafe?.isOpen !== undefined
+                        ? apiCafe.isOpen
+                          ? t('card_open')
+                          : t('card_closed')
+                        : cafe?.isOpen
+                          ? t('card_open')
+                          : t('card_closed')}
+                    </p>
+                    {isObjectId && tableDaySummary && Number(tableDaySummary.tableCapacity) > 0 ? (
+                      <p className="mt-3 text-white/55 text-xs leading-relaxed max-w-xl border border-white/10 bg-black/20 rounded-md px-4 py-3">
+                        <span className="text-[#c19d60] text-[10px] tracking-[0.25em] uppercase block mb-1">
+                          Tables ({tableSummaryDate})
+                        </span>
+                        Capacité : <strong className="text-white">{tableDaySummary.tableCapacity}</strong> · Réservées :{' '}
+                        <strong className="text-amber-200/90">{tableDaySummary.reservedTables}</strong> · Disponibles :{' '}
+                        <strong className="text-emerald-300/90">{tableDaySummary.availableTables}</strong>
+                        <span className="block text-white/35 text-[10px] mt-1">
+                          (réservations en attente ou acceptées pour cette date — 1 réservation = 1 table)
+                        </span>
+                      </p>
+                    ) : isObjectId && apiCafe && Number(apiCafe.tableCount) > 0 && tableSummaryLoading ? (
+                      <p className="mt-2 text-white/35 text-[11px]">
+                        Tables : {apiCafe.tableCount} (chargement des créneaux…)
+                      </p>
+                    ) : isObjectId && apiCafe && Number(apiCafe.tableCount) > 0 ? (
+                      <p className="mt-2 text-white/40 text-[11px]">Capacité : {apiCafe.tableCount} tables</p>
+                    ) : null}
+                  </>
                 ) : (
                   <p className="mt-4 text-red-300 text-sm">Café introuvable.</p>
                 )}
@@ -323,17 +397,19 @@ const CafePage = () => {
                   Découvrez la carte, les bestsellers et les saveurs du moment. Cette page est conçue comme un mini-site
                   (style café home) pour chaque café.
                 </p>
-                <div className="mt-8 flex flex-col sm:flex-row gap-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const el = document.getElementById('reservation');
-                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
-                    className="px-10 py-4 bg-[#c19d60] hover:bg-[#d4ac70] text-[#0b1f1e] text-[11px] font-semibold tracking-[0.22em] uppercase transition-all duration-300"
-                  >
-                    Book a table
-                  </button>
+                <div className="mt-8 flex flex-col sm:flex-row flex-wrap gap-4">
+                  {isClientUser ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('reservation');
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      className="px-10 py-4 bg-[#c19d60] hover:bg-[#d4ac70] text-[#0b1f1e] text-[11px] font-semibold tracking-[0.22em] uppercase transition-all duration-300"
+                    >
+                      Réserver une table
+                    </button>
+                  ) : null}
                   <a
                     href="#menu"
                     className="px-10 py-4 border border-white/30 hover:border-[#c19d60] text-white hover:text-[#c19d60] text-[11px] tracking-[0.22em] uppercase transition-all duration-300 text-center"
@@ -341,6 +417,21 @@ const CafePage = () => {
                     Voir le menu
                   </a>
                 </div>
+                {!user ? (
+                  <p className="mt-4 text-white/50 text-sm max-w-xl">
+                    <Link
+                      to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}
+                      className="text-[#c19d60] hover:text-[#d4ac70] underline underline-offset-4"
+                    >
+                      Connectez-vous
+                    </Link>{' '}
+                    avec un compte client pour réserver une table.
+                  </p>
+                ) : !isClientUser ? (
+                  <p className="mt-4 text-white/40 text-xs max-w-xl">
+                    La réservation en ligne est réservée aux comptes <span className="text-white/60">client</span>.
+                  </p>
+                ) : null}
               </div>
 
               <div className="border border-white/10 bg-[#0e2624]/70 backdrop-blur-sm p-6">
@@ -369,55 +460,84 @@ const CafePage = () => {
               <p className="mt-2 text-white/55 text-sm">
                 Prix de réservation: {Number(apiCafe?.reservationPrice || 0)} TND
               </p>
+              {isObjectId && tableDaySummary && Number(tableDaySummary.tableCapacity) > 0 ? (
+                <div className="mt-4 rounded-md border border-[#c19d60]/30 bg-[#c19d60]/5 px-4 py-3 text-sm text-white/80">
+                  <p className="text-[10px] tracking-[0.2em] uppercase text-[#c19d60] mb-1">État des tables</p>
+                  <p>
+                    Date : <span className="text-white">{tableSummaryDate}</span> — Total{' '}
+                    <strong className="text-white">{tableDaySummary.tableCapacity}</strong>, réservées{' '}
+                    <strong className="text-amber-200">{tableDaySummary.reservedTables}</strong>, disponibles{' '}
+                    <strong className="text-emerald-300">{tableDaySummary.availableTables}</strong>
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <input
-              type="number"
-              min={1}
-              value={reservation.peopleCount}
-              onChange={(e) => setReservation((p) => ({ ...p, peopleCount: e.target.value }))}
-              className="bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm"
-              placeholder="Nombre de personnes"
-            />
-            <input
-              type="date"
-              value={reservation.reservationDate}
-              onChange={(e) => setReservation((p) => ({ ...p, reservationDate: e.target.value }))}
-              className="bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm"
-            />
-            <input
-              type="time"
-              value={reservation.reservationTime}
-              onChange={(e) => setReservation((p) => ({ ...p, reservationTime: e.target.value }))}
-              className="bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm"
-            />
-            <select
-              value={reservation.occasionType}
-              onChange={(e) => setReservation((p) => ({ ...p, occasionType: e.target.value }))}
-              className="bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm"
-            >
-              <option value="normal">Rencontre normale</option>
-              <option value="romantic">Table romantique</option>
-              <option value="birthday">Anniversaire</option>
-              <option value="party">Fête</option>
-              <option value="business">Business</option>
-            </select>
-            <textarea
-              value={reservation.note}
-              onChange={(e) => setReservation((p) => ({ ...p, note: e.target.value }))}
-              placeholder="Petit message (optionnel)"
-              className="md:col-span-2 lg:col-span-2 min-h-12 bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm resize-none"
-            />
-            <button
-              type="button"
-              onClick={submitReservation}
-              disabled={reservationSaving}
-              className="bg-[#c19d60] hover:bg-[#d4ac70] disabled:opacity-50 text-[#0b1f1e] text-[11px] font-semibold tracking-[0.22em] uppercase px-6 py-3"
-            >
-              {reservationSaving ? 'Envoi…' : 'Réserver'}
-            </button>
-          </div>
+          {isClientUser ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <input
+                type="number"
+                min={1}
+                value={reservation.peopleCount}
+                onChange={(e) => setReservation((p) => ({ ...p, peopleCount: e.target.value }))}
+                className="bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm"
+                placeholder="Nombre de personnes"
+              />
+              <input
+                type="date"
+                value={reservation.reservationDate}
+                onChange={(e) => setReservation((p) => ({ ...p, reservationDate: e.target.value }))}
+                className="bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm"
+              />
+              <input
+                type="time"
+                value={reservation.reservationTime}
+                onChange={(e) => setReservation((p) => ({ ...p, reservationTime: e.target.value }))}
+                className="bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm"
+              />
+              <select
+                value={reservation.occasionType}
+                onChange={(e) => setReservation((p) => ({ ...p, occasionType: e.target.value }))}
+                className="bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm"
+              >
+                <option value="normal">Rencontre normale</option>
+                <option value="romantic">Table romantique</option>
+                <option value="birthday">Anniversaire</option>
+                <option value="party">Fête</option>
+                <option value="business">Business</option>
+              </select>
+              <textarea
+                value={reservation.note}
+                onChange={(e) => setReservation((p) => ({ ...p, note: e.target.value }))}
+                placeholder="Petit message (optionnel)"
+                className="md:col-span-2 lg:col-span-2 min-h-12 bg-[#0b1f1e] border border-white/10 text-white px-4 py-3 text-sm resize-none"
+              />
+              <button
+                type="button"
+                onClick={submitReservation}
+                disabled={reservationSaving}
+                className="bg-[#c19d60] hover:bg-[#d4ac70] disabled:opacity-50 text-[#0b1f1e] text-[11px] font-semibold tracking-[0.22em] uppercase px-6 py-3"
+              >
+                {reservationSaving ? 'Envoi…' : 'Réserver'}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-white/10 bg-[#0b1f1e]/60 px-5 py-8 text-center">
+              <p className="text-white/65 text-sm leading-relaxed">
+                {!user
+                  ? 'Pour envoyer une réservation, connectez-vous avec un compte client.'
+                  : 'Seuls les comptes client peuvent réserver une table en ligne.'}
+              </p>
+              {!user ? (
+                <Link
+                  to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}
+                  className="mt-5 inline-flex items-center justify-center px-8 py-3 bg-[#c19d60] hover:bg-[#d4ac70] text-[#0b1f1e] text-[11px] font-semibold tracking-[0.22em] uppercase transition-colors"
+                >
+                  Se connecter
+                </Link>
+              ) : null}
+            </div>
+          )}
           {reservationMsg ? <p className="mt-3 text-white/65 text-sm">{reservationMsg}</p> : null}
         </div>
       </section>
@@ -491,6 +611,15 @@ const CafePage = () => {
                               {p.description ? (
                                 <p className="mt-1 text-white/40 text-xs leading-relaxed max-w-[30rem] mx-auto">
                                   {p.description}
+                                </p>
+                              ) : null}
+                              {isObjectId ? (
+                                <p
+                                  className={`mt-2 text-[10px] tracking-[0.2em] uppercase ${
+                                    p.isAvailable !== false ? 'text-emerald-400/90' : 'text-red-400/85'
+                                  }`}
+                                >
+                                  {p.isAvailable !== false ? 'Disponible' : 'Indisponible'}
                                 </p>
                               ) : null}
                             </div>

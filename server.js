@@ -34,6 +34,7 @@ app.use('/api/cafe-products', require('./routes/cafeProductRoutes'));
 app.use('/api/foods', require('./routes/foodRoutes'));
 app.use('/api/commandes', require('./routes/commandeRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
+app.use('/api/stats', require('./routes/statsRoutes'));
 
 // Root
 app.get('/', (req, res) => {

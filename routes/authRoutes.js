@@ -54,7 +54,8 @@ router.post('/register/owner', async (req, res) => {
       restaurantCuisineType,
       restaurantImage,
       restaurantLocation,
-      restaurantGoogleMapsUrl
+      restaurantGoogleMapsUrl,
+      restaurantDelegation,
     } = req.body;
 
     if (!restaurantName || !restaurantAddress) {
@@ -83,6 +84,7 @@ router.post('/register/owner', async (req, res) => {
       name: restaurantName,
       description: restaurantDescription,
       address: restaurantAddress,
+      delegation: String(restaurantDelegation || '').trim(),
       cuisineType: restaurantCuisineType,
       image: restaurantImage,
       location: restaurantLocation,
@@ -124,7 +126,8 @@ router.post('/register/cafe-owner', async (req, res) => {
       cafeServices,
       cafeHospitalityType,
       tableReservationPrice,
-      cafeTableCount
+      cafeTableCount,
+      cafeDelegation,
     } = req.body;
     if (!cafeName || !cafeAddress) {
       return res.status(400).json({ message: 'cafeName and cafeAddress are required' });
@@ -146,6 +149,7 @@ router.post('/register/cafe-owner', async (req, res) => {
       owner: user._id,
       name: cafeName,
       address: cafeAddress,
+      delegation: String(cafeDelegation || '').trim(),
       description: cafeDescription,
       phone,
       googleMapsUrl: cafeMapsUrl || '',

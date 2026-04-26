@@ -12,6 +12,9 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
+// ─── PUBLIC STATS ───
+export const getHomeStats = () => API.get('/stats/home');
+
 // ─── AUTH ───
 export const registerUser  = (data) => API.post('/auth/register/user', data);
 export const registerOwner = (data) => API.post('/auth/register/owner', data);
@@ -24,6 +27,7 @@ export const updateProfile = (data) => API.put('/auth/profile', data);
 // ─── RESTAURANTS ───
 export const getRestaurants = (params) => API.get('/restaurants', { params });
 export const getRestaurant  = (id)     => API.get(`/restaurants/${id}`);
+export const getRestaurantReviews = (id, params) => API.get(`/restaurants/${id}/reviews`, { params });
 export const createRestaurant = (data) => API.post('/restaurants', data);
 export const updateRestaurant = (id, data) => API.put(`/restaurants/${id}`, data);
 export const getOwnerRestaurant = () => API.get('/restaurants/owner/my-restaurant');
@@ -33,7 +37,11 @@ export const getOwnerDashboard = () => API.get('/restaurants/owner/dashboard');
 export const getCafes = (params) => API.get('/cafes', { params });
 export const getCafe = (id) => API.get(`/cafes/${id}`);
 export const getOwnerCafe = () => API.get('/cafes/owner/my-cafe');
+export const updateOwnerCafe = (data) => API.put('/cafes/owner/my-cafe', data);
 export const getMyCafeReservations = () => API.get('/cafe-reservations/my');
+/** Résumé tables pour une date (public) : capacité, réservées, disponibles */
+export const getCafeReservationDaySummary = (cafeId, date) =>
+  API.get(`/cafe-reservations/cafe/${cafeId}/day/${date}`);
 export const createCafeReservation = (data) => API.post('/cafe-reservations', data);
 export const getOwnerCafeReservations = () => API.get('/cafe-reservations/owner/my-reservations');
 export const updateCafeReservationStatus = (id, data) => API.patch(`/cafe-reservations/${id}/status`, data);

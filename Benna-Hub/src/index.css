@@ -14,9 +14,40 @@
   --color-gold: #f0b429;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-fade-up,
+  .animate-float-soft,
+  .animate-fade-in,
+  .animate-photo-soft,
+  .animate-neon-border {
+    animation: none !important;
+  }
+
+  .reveal-once {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 body {
   background-color: #102b2a;
   color: #f5f0e8;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Touch / focus pro (sans casser l’existant) */
+:focus-visible {
+  outline: 2px solid rgba(193, 157, 96, 0.55);
+  outline-offset: 2px;
 }
 
 @keyframes fadeUp {

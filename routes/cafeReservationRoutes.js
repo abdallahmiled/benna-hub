@@ -5,6 +5,63 @@ const CafeReservation = require('../models/CafeReservation');
 const Counter = require('../models/Counter');
 const { protect, cafeOwner } = require('../middleware/authMiddleware');
 
+const ACTIVE_TABLE_STATUSES = ['pending', 'accepted'];
+
+/** Réattribue 1..cap aux réservations acceptées par date (cohérence + données anciennes). */
+async function normalizeAcceptedTableAssignments(cafeId, tableCapacity) {
+  const cap = Math.max(0, Number(tableCapacity) || 0);
+  if (cap < 1) return;
+  const dates = await CafeReservation.distinct('reservationDate', {
+    cafe: cafeId,
+    status: 'accepted',
+  });
+  for (const date of dates) {
+    const rows = await CafeReservation.find({
+      cafe: cafeId,
+      reservationDate: date,
+      status: 'accepted',
+    }).sort({ createdAt: 1 });
+    let n = 1;
+    for (const r of rows) {
+      const next = n <= cap ? n : null;
+      n += 1;
+      if (r.assignedTableNumber !== next) {
+        r.assignedTableNumber = next;
+        await r.save();
+      }
+    }
+  }
+}
+
+// Public: capacité tables / réservées / disponibles pour une date (1 réservation = 1 table)
+router.get('/cafe/:cafeId/day/:date', async (req, res) => {
+  try {
+    const { cafeId, date } = req.params;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: 'Date requise (YYYY-MM-DD).' });
+    }
+    const cafeDoc = await Cafe.findById(cafeId);
+    if (!cafeDoc) return res.status(404).json({ message: 'Cafe not found' });
+
+    const tableCapacity = Math.max(0, Number(cafeDoc.tableCount) || 0);
+    const reservedTables = await CafeReservation.countDocuments({
+      cafe: cafeDoc._id,
+      reservationDate: date,
+      status: { $in: ACTIVE_TABLE_STATUSES },
+    });
+    const availableTables = Math.max(0, tableCapacity - reservedTables);
+
+    res.json({
+      date,
+      tableCapacity,
+      reservedTables,
+      availableTables,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // User: create reservation
 router.post('/', protect, async (req, res) => {
   try {
@@ -64,6 +121,7 @@ router.get('/owner/my-reservations', protect, cafeOwner, async (req, res) => {
     const cafe = await Cafe.findOne({ owner: req.user._id });
     if (!cafe) return res.status(404).json({ message: 'Cafe not found for this owner' });
 
+    await normalizeAcceptedTableAssignments(cafe._id, cafe.tableCount);
     const rows = await CafeReservation.find({ cafe: cafe._id })
       .populate('user', 'name email phone')
       .sort({ createdAt: -1 });
@@ -91,6 +149,26 @@ router.patch('/:id/status', protect, cafeOwner, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized for this reservation' });
     }
 
+    const prevStatus = row.status;
+    const cap = Math.max(0, Number(cafe.tableCount) || 0);
+
+    if (status === 'accepted') {
+      if (cap < 1) {
+        return res.status(400).json({ message: 'Capacité tables non configurée dans le profil du café.' });
+      }
+      const countAccepted = await CafeReservation.countDocuments({
+        cafe: cafe._id,
+        reservationDate: row.reservationDate,
+        status: 'accepted',
+        _id: { $ne: row._id },
+      });
+      if (countAccepted >= cap) {
+        return res.status(400).json({ message: 'Plus de table libre pour cette date.' });
+      }
+    } else if (prevStatus === 'accepted' && ['rejected', 'completed', 'cancelled'].includes(status)) {
+      row.assignedTableNumber = null;
+    }
+
     row.status = status;
     row.ownerMessage =
       ownerMessage ||
@@ -101,7 +179,9 @@ router.patch('/:id/status', protect, cafeOwner, async (req, res) => {
           : status === 'completed'
             ? 'Reservation terminee.'
             : 'Reservation annulee.');
-    const updated = await row.save();
+    await row.save();
+    await normalizeAcceptedTableAssignments(cafe._id, cafe.tableCount);
+    const updated = await CafeReservation.findById(row._id).populate('user', 'name email phone');
     res.json(updated);
   } catch (err) {
     res.status(500).json({ message: err.message });
